@@ -1,0 +1,16 @@
+# ---------- Build stage ----------
+FROM node:20-alpine AS build
+WORKDIR /app
+ARG VITE_API_URL=http://localhost:8080/api
+ENV VITE_API_URL=$VITE_API_URL
+COPY package.json package-lock.json* ./
+RUN npm install --no-audit --no-fund
+COPY . .
+RUN npm run build
+
+# ---------- Runtime stage ----------
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s CMD wget --spider -q http://localhost/ || exit 1

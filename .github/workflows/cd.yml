@@ -1,0 +1,138 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  publish-images:
+    name: Publish Docker images
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata (backend)
+        id: meta-be
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/bodaboda-backend
+          tags: |
+            type=raw,value=latest
+            type=raw,value=v1
+            type=sha
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta-be.outputs.tags }}
+          labels: ${{ steps.meta-be.outputs.labels }}
+      - name: Extract metadata (frontend)
+        id: meta-fe
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/bodaboda-frontend
+          tags: |
+            type=raw,value=latest
+            type=raw,value=v1
+            type=sha
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta-fe.outputs.tags }}
+          labels: ${{ steps.meta-fe.outputs.labels }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: publish-images
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy compose file to staging server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          source: "deployment/staging/docker-compose.yml,deployment/scripts/deploy.sh"
+          target: "/opt/bodaboda"
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/bodaboda
+            export IMAGE_TAG=latest
+            export REGISTRY=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}
+            bash deployment/scripts/deploy.sh staging
+      - name: Health check
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://${{ secrets.STAGING_HOST }}:8080/actuator/health; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+
+  approval:
+    name: 🔒 Release Manager Approval
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production-approval
+    steps:
+      - run: echo "Approved by Release Manager. Proceeding to production."
+
+  deploy-production:
+    name: Deploy to Production
+    needs: approval
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy compose file to production server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: "deployment/production/docker-compose.yml,deployment/scripts/deploy.sh"
+          target: "/opt/bodaboda"
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/bodaboda
+            export IMAGE_TAG=v1
+            export REGISTRY=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}
+            bash deployment/scripts/deploy.sh production
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://${{ secrets.PROD_HOST }}:8080/actuator/health; then exit 0; fi
+            sleep 5
+          done
+          exit 1

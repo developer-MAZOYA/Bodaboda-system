@@ -1,0 +1,7 @@
+package com.bodaboda;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+// Rename this file to IntentionalFailureTest.java to demonstrate a failing CI pipeline.
+class IntentionalFailureTest {
+  @Test void this_test_fails_on_purpose() { assertEquals(1, 2, "Demo failure for CI"); }
+}

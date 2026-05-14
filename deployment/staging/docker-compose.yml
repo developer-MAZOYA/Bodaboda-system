@@ -1,0 +1,55 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bodaboda}
+      POSTGRES_USER: ${POSTGRES_USER:-bodaboda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bodaboda}
+    volumes: [pg_staging:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bodaboda}"]
+      interval: 10s
+
+  backend:
+    image: ${REGISTRY}/bodaboda-backend:${IMAGE_TAG:-latest}
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bodaboda}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bodaboda}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-bodaboda}
+      JWT_SECRET: ${JWT_SECRET}
+      SPRING_PROFILES_ACTIVE: staging
+    ports: ["8080:8080"]
+
+  frontend:
+    image: ${REGISTRY}/bodaboda-frontend:${IMAGE_TAG:-latest}
+    depends_on: [backend]
+    ports: ["3000:80"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ${MONITORING_DIR:-./../../monitoring}/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    depends_on: [backend]
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports: ["3002:3000"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ${MONITORING_DIR:-./../../monitoring}/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus]
+
+volumes:
+  pg_staging:
+  grafana_data:
+

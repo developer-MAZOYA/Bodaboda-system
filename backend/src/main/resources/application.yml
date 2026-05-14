@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: bodaboda-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bodaboda_db}
+    username: ${SPRING_DATASOURCE_USERNAME:bodaboda}
+    password: ${SPRING_DATASOURCE_PASSWORD:bodaboda}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+server:
+  port: ${SERVER_PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-please-use-a-long-secret-key-32+}
+    expiration-ms: 86400000
+logging:
+  level:
+    root: INFO
+    com.bodaboda: DEBUG
