@@ -1,27 +1,26 @@
-# Single stage build
-FROM node:20-alpine
+# Multi-stage Dockerfile
+FROM node:20-alpine AS backend-builder
+WORKDIR /app/backend
+COPY backend/ .
+RUN npm install
+RUN npm run build
 
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/ .
+RUN npm install
+RUN npm run build
+
+FROM node:20-alpine
 WORKDIR /app
 
 # Copy backend
-COPY backend/package*.json ./backend/
-RUN cd backend && npm ci
-COPY backend/ ./backend/
-RUN cd backend && npm run build
+COPY --from=backend-builder /app/backend/dist ./backend/dist
+COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
 
 # Copy frontend
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci
-COPY frontend/ ./frontend/
-RUN cd frontend && npm run build
-
-# Install serve for frontend (if not served by backend)
-RUN npm install -g serve
+COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
 EXPOSE 8080
 
-# If backend serves frontend
 CMD ["node", "backend/dist/server.js"]
-
-# If running separately:
-# CMD ["sh", "-c", "node backend/dist/server.js & serve -s frontend/build -l 3000"]
