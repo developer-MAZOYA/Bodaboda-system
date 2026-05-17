@@ -59,7 +59,7 @@ services:
     ports:
       - "3001:80"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -92,6 +92,19 @@ services:
       - backend
     networks: [bodaboda-net]
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: bodaboda-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-Crosshood@442}@postgres:5432/${POSTGRES_DB:-bodaboda_db}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9187:9187"
+    networks: [bodaboda-net]
+
   grafana:
     image: grafana/grafana:latest
     container_name: bodaboda-grafana
@@ -117,4 +130,3 @@ volumes:
 networks:
   bodaboda-net:
     driver: bridge
-

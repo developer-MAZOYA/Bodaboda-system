@@ -43,8 +43,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package.json
       - name: Install deps
         working-directory: frontend
         run: npm install --no-audit --no-fund
@@ -66,3 +64,15 @@ jobs:
         run: docker build -t bodaboda-frontend:ci ./frontend
       - name: Compose config sanity check
         run: docker compose -f docker-compose.yml config
+      - name: Staging compose config sanity check
+        env:
+          REGISTRY: ghcr.io/example
+          IMAGE_TAG: ci
+          JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+        run: docker compose -f deployment/staging/docker-compose.yml config
+      - name: Production compose config sanity check
+        env:
+          REGISTRY: ghcr.io/example
+          IMAGE_TAG: ci
+          JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+        run: docker compose -f deployment/production/docker-compose.yml config
