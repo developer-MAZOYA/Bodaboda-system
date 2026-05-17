@@ -10,6 +10,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ${{ github.repository_owner }}
+  # GitHub Actions: force JS actions runtime to Node 24 to avoid Node 20 deprecation issues
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 
 jobs:
   publish-images:
@@ -64,7 +67,8 @@ jobs:
     name: Deploy to Staging
     needs: publish-images
     runs-on: ubuntu-latest
-    environment: staging
+    environment:
+      name: staging
     steps:
       - uses: actions/checkout@v4
       - name: Copy compose file to staging server
@@ -93,21 +97,20 @@ jobs:
             sleep 5
           done
           exit 1
-
   approval:
     name: 🔒 Release Manager Approval
     needs: deploy-staging
     runs-on: ubuntu-latest
     environment:
-      name: production-approval
+      name: production-manager-approval
     steps:
       - run: echo "Approved by Release Manager. Proceeding to production."
-
   deploy-production:
     name: Deploy to Production
     needs: approval
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
     steps:
       - uses: actions/checkout@v4
       - name: Copy compose file to production server

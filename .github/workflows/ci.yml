@@ -6,7 +6,12 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  # GitHub Actions: force JS actions runtime to Node 24 to avoid Node 20 deprecation issues
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
+
   backend:
     name: Backend - Build & Test
     runs-on: ubuntu-latest
