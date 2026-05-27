@@ -1,5 +1,6 @@
 package com.bodaboda.service;
 import com.bodaboda.dto.RideDtos.*;
+import com.bodaboda.dto.RideRequestEvent;
 import com.bodaboda.entity.Ride;
 import com.bodaboda.entity.User;
 import com.bodaboda.repository.RideRepository;
@@ -14,7 +15,12 @@ import java.util.UUID;
 public class RideService {
   private final RideRepository rides;
   private final UserRepository users;
-  public RideService(RideRepository r, UserRepository u) { this.rides = r; this.users = u; }
+  private final MqttRidePublisher mqttRidePublisher;
+  public RideService(RideRepository r, UserRepository u, MqttRidePublisher p) {
+    this.rides = r;
+    this.users = u;
+    this.mqttRidePublisher = p;
+  }
 
   public Ride book(String email, BookRequest req) {
     User customer = users.findByEmail(email).orElseThrow();
@@ -23,7 +29,16 @@ public class RideService {
         .pickup(req.pickup()).dropoff(req.dropoff())
         .fare(req.fare() == null ? BigDecimal.valueOf(150) : req.fare())
         .status("REQUESTED").build();
-    return rides.save(ride);
+    Ride saved = rides.save(ride);
+    mqttRidePublisher.publishRideRequest(new RideRequestEvent(
+        saved.getId(),
+        saved.getCustomerId(),
+        saved.getPickup(),
+        saved.getDropoff(),
+        saved.getFare(),
+        saved.getStatus(),
+        saved.getCreatedAt()));
+    return saved;
   }
   public List<Ride> listFor(String email) {
     User u = users.findByEmail(email).orElseThrow();

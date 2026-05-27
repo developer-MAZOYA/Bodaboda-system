@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api.js';
+import storage from '../services/storage.js';
 export default function Login() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   const [err, setErr] = useState(''); const nav = useNavigate();
@@ -8,9 +9,9 @@ export default function Login() {
     e.preventDefault(); setErr('');
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('role', data.role);
-      localStorage.setItem('name', data.fullName);
+      storage.setItem('token', data.token);
+      storage.setItem('role', data.role);
+      storage.setItem('name', data.fullName);
       nav('/');
     } catch (e) { setErr(e.response?.data?.message || 'Login failed'); }
   };

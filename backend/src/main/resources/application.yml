@@ -31,6 +31,10 @@ app:
   jwt:
     secret: ${JWT_SECRET:change-me-please-use-a-long-secret-key-32+}
     expiration-ms: 86400000
+  mqtt:
+    enabled: ${MQTT_ENABLED:true}
+    broker-uri: ${MQTT_BROKER_URI:tcp://localhost:1883}
+    ride-request-topic: ${MQTT_RIDE_REQUEST_TOPIC:ride/request}
 logging:
   level:
     root: INFO

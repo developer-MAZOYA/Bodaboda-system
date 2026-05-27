@@ -11,3 +11,5 @@ app:
   jwt:
     secret: test-secret-key-must-be-long-enough-for-hs256-algo
     expiration-ms: 3600000
+  mqtt:
+    enabled: false

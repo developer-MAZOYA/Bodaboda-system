@@ -7,8 +7,7 @@ on:
     branches: [main, develop]
 
 env:
-  # GitHub Actions: force JS actions runtime to Node 24 to avoid Node 20 deprecation issues
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  MQTT_RIDE_REQUEST_TOPIC: ride/request
 
 jobs:
 
@@ -42,17 +41,47 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install deps
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Build
         working-directory: frontend
         run: npm run build
 
+  mqtt-integration:
+    name: MQTT - Publish & Subscribe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify MQTT publish and receive
+        run: |
+          set -euo pipefail
+          docker run -d --name ci-mqtt -p 1883:1883 eclipse-mosquitto:2 \
+            mosquitto -c /mosquitto-no-auth.conf
+          trap 'docker rm -f ci-mqtt' EXIT
+          ready=0
+          for attempt in $(seq 1 20); do
+            if docker exec ci-mqtt mosquitto_pub -h localhost -t healthcheck -m ready; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          docker exec ci-mqtt mosquitto_sub -h localhost -t "${MQTT_RIDE_REQUEST_TOPIC}" -C 1 \
+            > /tmp/mqtt-message.txt &
+          subscriber_pid=$!
+          sleep 2
+          docker exec ci-mqtt mosquitto_pub -h localhost -t "${MQTT_RIDE_REQUEST_TOPIC}" \
+            -m '{"rideId":"ci-ride-001","pickup":"Nyerere Square","dropoff":"Mlimani City","status":"REQUESTED"}'
+          wait "$subscriber_pid"
+          grep -q '"status":"REQUESTED"' /tmp/mqtt-message.txt
+
   docker-build:
     name: Build Docker images
-    needs: [backend, frontend]
+    needs: [backend, frontend, mqtt-integration]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,10 +98,12 @@ jobs:
           REGISTRY: ghcr.io/example
           IMAGE_TAG: ci
           JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+          MQTT_RIDE_REQUEST_TOPIC: ride/request
         run: docker compose -f deployment/staging/docker-compose.yml config
       - name: Production compose config sanity check
         env:
           REGISTRY: ghcr.io/example
           IMAGE_TAG: ci
           JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+          MQTT_RIDE_REQUEST_TOPIC: ride/request
         run: docker compose -f deployment/production/docker-compose.yml config

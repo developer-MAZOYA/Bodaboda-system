@@ -1,4 +1,18 @@
 services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: bodaboda-mqtt
+    restart: unless-stopped
+    command: mosquitto -c /mosquitto-no-auth.conf
+    ports:
+      - "1883:1883"
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -t healthcheck -m ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [bodaboda-net]
+
   postgres:
     image: postgres:16-alpine
     container_name: bodaboda-postgres
@@ -27,6 +41,8 @@ services:
     container_name: bodaboda-backend
     restart: unless-stopped
     depends_on:
+      mqtt:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
@@ -34,6 +50,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-Crosshood@442}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-use-32-chars}
+      MQTT_BROKER_URI: tcp://mqtt:1883
+      MQTT_RIDE_REQUEST_TOPIC: ${MQTT_RIDE_REQUEST_TOPIC:-ride/request}
       SERVER_PORT: 8080
     ports:
       - "8080:8080"

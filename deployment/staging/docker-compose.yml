@@ -1,4 +1,12 @@
 services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    command: mosquitto -c /mosquitto-no-auth.conf
+    ports: ["1883:1883"]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -t healthcheck -m ready"]
+      interval: 10s
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -13,12 +21,15 @@ services:
   backend:
     image: ${REGISTRY}/bodaboda-backend:${IMAGE_TAG:-latest}
     depends_on:
+      mqtt: { condition: service_healthy }
       postgres: { condition: service_healthy }
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bodaboda}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bodaboda}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-bodaboda}
       JWT_SECRET: ${JWT_SECRET}
+      MQTT_BROKER_URI: tcp://mqtt:1883
+      MQTT_RIDE_REQUEST_TOPIC: ${MQTT_RIDE_REQUEST_TOPIC:-ride/request}
       SPRING_PROFILES_ACTIVE: staging
     ports: ["8080:8080"]
 

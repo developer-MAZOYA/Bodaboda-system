@@ -10,11 +10,10 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ${{ github.repository_owner }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  MQTT_RIDE_REQUEST_TOPIC: ride/request
 
 jobs:
   publish-images:
-    name: Publish Docker Images
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -72,6 +71,22 @@ jobs:
     needs: publish-images
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Validate staging compose with MQTT broker
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          IMAGE_TAG: latest
+          JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+        run: docker compose -f deployment/staging/docker-compose.yml config
+      - name: Trigger MQTT broker deployment
+        env:
+          RENDER_STAGING_MQTT_WEBHOOK: ${{ secrets.RENDER_STAGING_MQTT_WEBHOOK }}
+        run: |
+          if [ -n "$RENDER_STAGING_MQTT_WEBHOOK" ]; then
+            curl -X POST "$RENDER_STAGING_MQTT_WEBHOOK"
+          else
+            echo "RENDER_STAGING_MQTT_WEBHOOK is not set; skipping separate MQTT broker webhook."
+          fi
       - name: Trigger Render deployment
         run: |
           curl -X POST "${{ secrets.RENDER_STAGING_WEBHOOK }}"
@@ -102,6 +117,22 @@ jobs:
     needs: approval
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Validate production compose with MQTT broker
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          IMAGE_TAG: v1
+          JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+        run: docker compose -f deployment/production/docker-compose.yml config
+      - name: Trigger MQTT broker deployment
+        env:
+          RENDER_PROD_MQTT_WEBHOOK: ${{ secrets.RENDER_PROD_MQTT_WEBHOOK }}
+        run: |
+          if [ -n "$RENDER_PROD_MQTT_WEBHOOK" ]; then
+            curl -X POST "$RENDER_PROD_MQTT_WEBHOOK"
+          else
+            echo "RENDER_PROD_MQTT_WEBHOOK is not set; skipping separate MQTT broker webhook."
+          fi
       - name: Trigger Render deployment
         run: |
           curl -X POST "${{ secrets.RENDER_PROD_WEBHOOK }}"

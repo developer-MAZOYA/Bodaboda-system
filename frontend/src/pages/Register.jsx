@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api.js';
+import storage from '../services/storage.js';
 export default function Register() {
   const [f, setF] = useState({ fullName:'', email:'', phone:'', password:'', role:'CUSTOMER' });
   const [err, setErr] = useState(''); const nav = useNavigate();
@@ -9,8 +10,8 @@ export default function Register() {
     e.preventDefault(); setErr('');
     try {
       const { data } = await api.post('/auth/register', f);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('role', data.role);
+      storage.setItem('token', data.token);
+      storage.setItem('role', data.role);
       nav('/');
     } catch (error) { 
       console.error('Registration error:', error);
