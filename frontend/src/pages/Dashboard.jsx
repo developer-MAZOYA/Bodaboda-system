@@ -18,7 +18,8 @@ const statusTone = {
 const countByStatus = (rides, status) => rides.filter((ride) => ride.status === status).length;
 
 export default function Dashboard() {
-  const role = storage.getItem('role');
+  const storedRole = storage.getItem('role');
+  const role = (storedRole || 'CUSTOMER').toUpperCase();
   const [rides, setRides] = useState([]);
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
@@ -98,6 +99,32 @@ export default function Dashboard() {
 
       {error && <div className="alert alert-danger border-0 shadow-sm">{error}</div>}
 
+      {role === 'CUSTOMER' && (
+        <form className="request-bar mb-4" onSubmit={book}>
+          <div className="section-heading">
+            <span className="eyebrow">New request</span>
+            <h2>Request a ride</h2>
+          </div>
+          <input
+            className="form-control"
+            placeholder="Pickup"
+            value={pickup}
+            onChange={(event) => setPickup(event.target.value)}
+            required
+          />
+          <input
+            className="form-control"
+            placeholder="Dropoff"
+            value={dropoff}
+            onChange={(event) => setDropoff(event.target.value)}
+            required
+          />
+          <button className="btn btn-primary" disabled={saving}>
+            {saving ? 'Booking...' : 'Book Ride'}
+          </button>
+        </form>
+      )}
+
       <section className="metric-grid mb-4">
         <div className="metric-card">
           <span>Total rides</span>
@@ -121,49 +148,20 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <div className="row g-4 align-items-start">
-        {role === 'CUSTOMER' && (
-          <div className="col-lg-4">
-            <form className="booking-panel" onSubmit={book}>
-              <div className="section-heading mb-3">
-                <span className="eyebrow">New request</span>
-                <h2>Book a ride</h2>
-              </div>
-              <label className="form-label">Pickup point</label>
-              <input
-                className="form-control form-control-lg mb-3"
-                placeholder="Nyerere Square"
-                value={pickup}
-                onChange={(event) => setPickup(event.target.value)}
-                required
-              />
-              <label className="form-label">Dropoff point</label>
-              <input
-                className="form-control form-control-lg mb-4"
-                placeholder="Mlimani City"
-                value={dropoff}
-                onChange={(event) => setDropoff(event.target.value)}
-                required
-              />
-              <button className="btn btn-dark btn-lg w-100" disabled={saving}>
-                {saving ? 'Booking...' : 'Book Ride'}
-              </button>
-              {latestRide && (
-                <div className="latest-strip mt-4">
-                  <span>Latest ride</span>
-                  <strong>{latestRide.pickup} to {latestRide.dropoff}</strong>
-                </div>
-              )}
-            </form>
-          </div>
-        )}
+      {role === 'CUSTOMER' && latestRide && (
+        <div className="latest-strip mb-4">
+          <span>Latest ride</span>
+          <strong>{latestRide.pickup} to {latestRide.dropoff}</strong>
+        </div>
+      )}
 
-        <div className={role === 'CUSTOMER' ? 'col-lg-8' : 'col-12'}>
+      <div className="row g-4 align-items-start">
+        <div className="col-12">
           <section className="table-panel">
             <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <div className="section-heading">
                 <span className="eyebrow">Operations</span>
-                <h2>{role === 'RIDER' ? 'Available and assigned rides' : 'Ride history'}</h2>
+                <h2>{role === 'RIDER' ? 'Available and assigned requests' : 'Your ride requests'}</h2>
               </div>
               <button className="btn btn-outline-dark btn-sm" onClick={load} disabled={loading}>
                 Refresh
@@ -178,37 +176,45 @@ export default function Dashboard() {
                 <span>{role === 'CUSTOMER' ? 'Create your first request to see it here.' : 'New passenger requests will appear here.'}</span>
               </div>
             ) : (
-              <div className="ride-list">
-                {rides.map((ride) => (
-                  <article className="ride-row" key={ride.id}>
-                    <div className="route-markers">
-                      <span />
-                      <i />
-                      <span />
-                    </div>
-                    <div className="ride-main">
-                      <div className="ride-route">
-                        <strong>{ride.pickup}</strong>
-                        <span>{ride.dropoff}</span>
-                      </div>
-                      <div className="ride-meta">
-                        <span>{currency(ride.fare)}</span>
-                        {ride.createdAt && <span>{new Date(ride.createdAt).toLocaleDateString()}</span>}
-                      </div>
-                    </div>
-                    <div className="ride-actions">
-                      <span className={`status-pill status-${statusTone[ride.status] || 'secondary'}`}>
-                        {ride.status}
-                      </span>
-                      {role === 'RIDER' && ride.status === 'REQUESTED' && (
-                        <button className="btn btn-sm btn-success" onClick={() => setStatus(ride.id, 'ACCEPTED')}>Accept</button>
-                      )}
-                      {role === 'RIDER' && ride.status === 'ACCEPTED' && (
-                        <button className="btn btn-sm btn-primary" onClick={() => setStatus(ride.id, 'COMPLETED')}>Complete</button>
-                      )}
-                    </div>
-                  </article>
-                ))}
+              <div className="table-responsive">
+                <table className="table request-table align-middle">
+                  <thead>
+                    <tr>
+                      <th>Pickup</th>
+                      <th>Dropoff</th>
+                      <th>Status</th>
+                      <th>Fare</th>
+                      <th>Requested</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rides.map((ride) => (
+                      <tr key={ride.id}>
+                        <td>{ride.pickup}</td>
+                        <td>{ride.dropoff}</td>
+                        <td>
+                          <span className={`status-pill status-${statusTone[ride.status] || 'secondary'}`}>
+                            {ride.status}
+                          </span>
+                        </td>
+                        <td>{currency(ride.fare)}</td>
+                        <td>{ride.createdAt ? new Date(ride.createdAt).toLocaleDateString() : '-'}</td>
+                        <td>
+                          <div className="ride-actions justify-content-start">
+                            {role === 'RIDER' && ride.status === 'REQUESTED' && (
+                              <button className="btn btn-sm btn-success" onClick={() => setStatus(ride.id, 'ACCEPTED')}>Accept</button>
+                            )}
+                            {role === 'RIDER' && ride.status === 'ACCEPTED' && (
+                              <button className="btn btn-sm btn-primary" onClick={() => setStatus(ride.id, 'COMPLETED')}>Complete</button>
+                            )}
+                            {role !== 'RIDER' && <span className="table-subtext">-</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>

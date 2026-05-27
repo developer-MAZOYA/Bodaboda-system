@@ -124,6 +124,7 @@ body {
 }
 
 .metric-card,
+.request-bar,
 .booking-panel,
 .table-panel {
   background: var(--panel);
@@ -135,6 +136,23 @@ body {
 .metric-card {
   min-height: 132px;
   padding: 20px;
+}
+
+.request-bar {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.9fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px;
+}
+
+.request-bar .section-heading {
+  align-self: center;
+}
+
+.request-bar .btn {
+  min-width: 132px;
+  white-space: nowrap;
 }
 
 .metric-card.featured {
@@ -206,6 +224,22 @@ body {
 .ride-list {
   display: grid;
   gap: 12px;
+}
+
+.request-table {
+  margin-bottom: 0;
+}
+
+.request-table thead th {
+  color: #64748b;
+  border-bottom-color: #d9dee8;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.request-table td {
+  border-color: #eef2f7;
 }
 
 .ride-row {
@@ -488,6 +522,15 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .request-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .request-bar .section-heading,
+  .request-bar .btn {
+    grid-column: 1 / -1;
+  }
+
   .hero-panel {
     align-items: stretch;
     flex-direction: column;
@@ -509,6 +552,15 @@ body {
   .admin-metrics,
   .insight-grid {
     grid-template-columns: 1fr;
+  }
+
+  .request-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .request-bar .section-heading,
+  .request-bar .btn {
+    grid-column: auto;
   }
 
   .ride-row {
