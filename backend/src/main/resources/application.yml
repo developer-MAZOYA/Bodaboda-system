@@ -2,9 +2,9 @@ spring:
   application:
     name: bodaboda-backend
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bodaboda_db}
-    username: ${SPRING_DATASOURCE_USERNAME:bodaboda}
-    password: ${SPRING_DATASOURCE_PASSWORD:bodaboda}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update
