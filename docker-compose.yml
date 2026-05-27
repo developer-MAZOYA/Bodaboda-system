@@ -46,13 +46,14 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bodaboda_db}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-Crosshood@442}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-use-32-chars}
-      MQTT_BROKER_URI: tcp://mqtt:1883
-      MQTT_RIDE_REQUEST_TOPIC: ${MQTT_RIDE_REQUEST_TOPIC:-ride/request}
-      SERVER_PORT: 8080
+      # Remove defaults - let Spring Boot pick up from Render's environment
+      - SPRING_DATASOURCE_URL
+      - SPRING_DATASOURCE_USERNAME
+      - SPRING_DATASOURCE_PASSWORD
+      - JWT_SECRET
+      - MQTT_BROKER_URI
+      - MQTT_RIDE_REQUEST_TOPIC
+      - SERVER_PORT
     ports:
       - "8080:8080"
     healthcheck:
