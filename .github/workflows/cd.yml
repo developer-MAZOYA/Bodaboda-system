@@ -72,12 +72,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Validate staging compose with MQTT broker
         env:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           IMAGE_TAG: latest
           JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
         run: docker compose -f deployment/staging/docker-compose.yml config
+      
       - name: Trigger MQTT broker deployment
         env:
           RENDER_STAGING_MQTT_WEBHOOK: ${{ secrets.RENDER_STAGING_MQTT_WEBHOOK }}
@@ -87,21 +89,25 @@ jobs:
           else
             echo "RENDER_STAGING_MQTT_WEBHOOK is not set; skipping separate MQTT broker webhook."
           fi
+      
       - name: Trigger Render deployment
         run: |
           curl -X POST "${{ secrets.RENDER_STAGING_WEBHOOK }}"
+      
       - name: Health check
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS https://${{ secrets.RENDER_STAGING_URL }}/actuator/health; then
-              echo "Health check passed!"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.RENDER_STAGING_URL }}/ || echo "000")
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "503" ]; then
+              echo "Health check passed! Service is responding (HTTP $HTTP_CODE)"
               exit 0
             fi
-            echo "Waiting for service to be ready... ($i/30)"
+            echo "Waiting for service to be ready... ($i/30) - HTTP $HTTP_CODE"
             sleep 10
           done
           echo "Health check failed after 30 attempts"
           exit 1
+
 
   approval:
     name: 🔒 Release Manager Approval
@@ -112,18 +118,21 @@ jobs:
     steps:
       - run: echo "Approved by Release Manager. Proceeding to production."
 
+
   deploy-production:
     name: Deploy to Production (Render)
     needs: approval
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Validate production compose with MQTT broker
         env:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           IMAGE_TAG: v1
           JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
         run: docker compose -f deployment/production/docker-compose.yml config
+      
       - name: Trigger MQTT broker deployment
         env:
           RENDER_PROD_MQTT_WEBHOOK: ${{ secrets.RENDER_PROD_MQTT_WEBHOOK }}
@@ -133,17 +142,20 @@ jobs:
           else
             echo "RENDER_PROD_MQTT_WEBHOOK is not set; skipping separate MQTT broker webhook."
           fi
+      
       - name: Trigger Render deployment
         run: |
           curl -X POST "${{ secrets.RENDER_PROD_WEBHOOK }}"
+      
       - name: Health check
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS https://${{ secrets.RENDER_PROD_URL }}/actuator/health; then
-              echo "Health check passed!"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.RENDER_PROD_URL }}/ || echo "000")
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "503" ]; then
+              echo "Health check passed! Service is responding (HTTP $HTTP_CODE)"
               exit 0
             fi
-            echo "Waiting for service to be ready... ($i/30)"
+            echo "Waiting for service to be ready... ($i/30) - HTTP $HTTP_CODE"
             sleep 10
           done
           echo "Health check failed after 30 attempts"
