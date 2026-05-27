@@ -1,0 +1,57 @@
+# docker-compose.prod.yml - FOR REFERENCE ONLY
+# Render will use individual Dockerfiles, not this compose file
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bodaboda-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    networks:
+      - bodaboda-net-prod
+
+  backend:
+    image: ghcr.io/developer-mazoya/bodaboda-backend:latest
+    container_name: bodaboda-backend-prod
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      MQTT_ENABLED: "false"
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - bodaboda-net-prod
+
+  frontend:
+    image: ghcr.io/developer-mazoya/bodaboda-frontend:latest
+    container_name: bodaboda-frontend-prod
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: https://bodaboda-system.onrender.com/api
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - bodaboda-net-prod
+
+volumes:
+  postgres_data_prod:
+
+networks:
+  bodaboda-net-prod:
+    driver: bridge
+    
