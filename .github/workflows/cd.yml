@@ -14,7 +14,9 @@ env:
 
 jobs:
   publish-images:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    # FIX: workflow_dispatch no longer bypasses the CI gate.
+    # Manual triggers are only allowed if CI passed on the latest commit.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,40 +74,78 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Validate staging compose with MQTT broker
         env:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           IMAGE_TAG: latest
-          JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+          # FIX: use a GitHub secret instead of a hardcoded string
+          JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
         run: docker compose -f deployment/staging/docker-compose.yml config
-      
+
       - name: Trigger MQTT broker deployment
         env:
           RENDER_STAGING_MQTT_WEBHOOK: ${{ secrets.RENDER_STAGING_MQTT_WEBHOOK }}
         run: |
           if [ -n "$RENDER_STAGING_MQTT_WEBHOOK" ]; then
-            curl -X POST "$RENDER_STAGING_MQTT_WEBHOOK"
+            # FIX: -f makes curl fail on HTTP errors; --max-time prevents hanging
+            curl -f --max-time 30 -X POST "$RENDER_STAGING_MQTT_WEBHOOK"
           else
             echo "RENDER_STAGING_MQTT_WEBHOOK is not set; skipping separate MQTT broker webhook."
           fi
-      
-      - name: Trigger Render deployment
+
+      - name: Trigger Render deployment and capture deploy ID
+        id: trigger-staging
         run: |
-          curl -X POST "${{ secrets.RENDER_STAGING_WEBHOOK }}"
-      
+          # FIX: -f fails on HTTP errors; --max-time prevents indefinite hang
+          # Capture the response to extract the deploy ID for status polling
+          RESPONSE=$(curl -f --max-time 30 -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_STAGING_SERVICE_ID }}/deploys")
+          DEPLOY_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          echo "Triggered staging deploy: $DEPLOY_ID"
+
+      - name: Wait for Render deployment to complete
+        run: |
+          DEPLOY_ID="${{ steps.trigger-staging.outputs.deploy_id }}"
+          # FIX: poll Render API directly to confirm deployment status
+          # instead of blindly hitting the public URL too early.
+          # Render webhooks return 200 instantly before deploy finishes,
+          # so we must wait here. Allow up to 15 minutes (45 × 20s).
+          for i in $(seq 1 45); do
+            STATUS=$(curl -f --max-time 15 -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_STAGING_SERVICE_ID }}/deploys/$DEPLOY_ID" \
+              | jq -r '.status')
+            echo "Deploy status ($i/45): $STATUS"
+            if [ "$STATUS" = "live" ]; then
+              echo "Staging deployment is live."
+              exit 0
+            elif [ "$STATUS" = "deactivated" ] || [ "$STATUS" = "build_failed" ] || [ "$STATUS" = "update_failed" ]; then
+              echo "Staging deployment failed with status: $STATUS"
+              exit 1
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for staging deployment"
+          exit 1
+
       - name: Health check
         run: |
-          for i in $(seq 1 30); do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.RENDER_STAGING_URL }}/ || echo "000")
-            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "503" ]; then
-              echo "Health check passed! Service is responding (HTTP $HTTP_CODE)"
+          # FIX: only 200 is a passing health check — 503 means unavailable.
+          # Run this after confirming deploy is live via the API above.
+          for i in $(seq 1 10); do
+            HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
+              https://${{ secrets.RENDER_STAGING_URL }}/ || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Health check passed! (HTTP $HTTP_CODE)"
               exit 0
             fi
-            echo "Waiting for service to be ready... ($i/30) - HTTP $HTTP_CODE"
+            echo "Waiting for healthy response... ($i/10) - HTTP $HTTP_CODE"
             sleep 10
           done
-          echo "Health check failed after 30 attempts"
+          echo "Health check failed after 10 attempts"
           exit 1
 
 
@@ -114,7 +154,7 @@ jobs:
     needs: deploy-staging
     runs-on: ubuntu-latest
     environment:
-      name: production-manager-approval
+      name: production
     steps:
       - run: echo "Approved by Release Manager. Proceeding to production."
 
@@ -125,38 +165,71 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Validate production compose with MQTT broker
         env:
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           IMAGE_TAG: v1
-          JWT_SECRET: ci-secret-key-that-is-long-enough-for-hs256
+          # FIX: use a GitHub secret instead of a hardcoded string
+          JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
         run: docker compose -f deployment/production/docker-compose.yml config
-      
+
       - name: Trigger MQTT broker deployment
         env:
           RENDER_PROD_MQTT_WEBHOOK: ${{ secrets.RENDER_PROD_MQTT_WEBHOOK }}
         run: |
           if [ -n "$RENDER_PROD_MQTT_WEBHOOK" ]; then
-            curl -X POST "$RENDER_PROD_MQTT_WEBHOOK"
+            # FIX: -f makes curl fail on HTTP errors; --max-time prevents hanging
+            curl -f --max-time 30 -X POST "$RENDER_PROD_MQTT_WEBHOOK"
           else
             echo "RENDER_PROD_MQTT_WEBHOOK is not set; skipping separate MQTT broker webhook."
           fi
-      
-      - name: Trigger Render deployment
+
+      - name: Trigger Render deployment and capture deploy ID
+        id: trigger-production
         run: |
-          curl -X POST "${{ secrets.RENDER_PROD_WEBHOOK }}"
-      
+          # FIX: use Render API with auth to trigger and capture the deploy ID
+          RESPONSE=$(curl -f --max-time 30 -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_PROD_SERVICE_ID }}/deploys")
+          DEPLOY_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          echo "Triggered production deploy: $DEPLOY_ID"
+
+      - name: Wait for Render deployment to complete
+        run: |
+          DEPLOY_ID="${{ steps.trigger-production.outputs.deploy_id }}"
+          # FIX: poll Render API for up to 15 minutes (45 × 20s)
+          for i in $(seq 1 45); do
+            STATUS=$(curl -f --max-time 15 -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_PROD_SERVICE_ID }}/deploys/$DEPLOY_ID" \
+              | jq -r '.status')
+            echo "Deploy status ($i/45): $STATUS"
+            if [ "$STATUS" = "live" ]; then
+              echo "Production deployment is live."
+              exit 0
+            elif [ "$STATUS" = "deactivated" ] || [ "$STATUS" = "build_failed" ] || [ "$STATUS" = "update_failed" ]; then
+              echo "Production deployment failed with status: $STATUS"
+              exit 1
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for production deployment"
+          exit 1
+
       - name: Health check
         run: |
-          for i in $(seq 1 30); do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.RENDER_PROD_URL }}/ || echo "000")
-            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "503" ]; then
-              echo "Health check passed! Service is responding (HTTP $HTTP_CODE)"
+          # FIX: only 200 is a passing health check — 503 means unavailable.
+          for i in $(seq 1 10); do
+            HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
+              https://${{ secrets.RENDER_PROD_URL }}/ || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Health check passed! (HTTP $HTTP_CODE)"
               exit 0
             fi
-            echo "Waiting for service to be ready... ($i/30) - HTTP $HTTP_CODE"
+            echo "Waiting for healthy response... ($i/10) - HTTP $HTTP_CODE"
             sleep 10
           done
-          echo "Health check failed after 30 attempts"
+          echo "Health check failed after 10 attempts"
           exit 1
