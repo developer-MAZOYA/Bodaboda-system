@@ -33,7 +33,7 @@ app:
     expiration-ms: 86400000
   mqtt:
     enabled: ${MQTT_ENABLED:true}
-    broker-uri: ${MQTT_BROKER_URI:tcp://localhost:1883}
+    broker-uri: ws://bodaboda-mqtt-staging.onrender.com:80
     ride-request-topic: ${MQTT_RIDE_REQUEST_TOPIC:ride/request}
 logging:
   level:
