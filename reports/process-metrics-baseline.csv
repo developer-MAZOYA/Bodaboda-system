@@ -1,0 +1,7 @@
+metric,baseline_value,target_value,unit,source
+backend_build_test_time,120,100,seconds,GitHub Actions backend-ci-metrics artifact
+frontend_build_time,30,25,seconds,GitHub Actions frontend-ci-metrics artifact
+test_success_rate,100,95,percent,Maven/JUnit report
+deployment_frequency,1,1,per_successful_main_run,GitHub Actions CD workflow
+mqtt_message_latency,1000,500,milliseconds,GitHub Actions mqtt-ci-metrics artifact
+downtime_after_deployment,300,120,seconds,Render health checks and Grafana

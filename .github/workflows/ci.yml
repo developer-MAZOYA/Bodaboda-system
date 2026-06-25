@@ -22,12 +22,28 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Run tests (JUnit + Mockito)
+      - name: Run tests with coverage (JUnit + Mockito)
         working-directory: backend
-        run: mvn -B test
+        run: |
+          start=$(date +%s)
+          mvn -B verify
+          end=$(date +%s)
+          mkdir -p ../reports/ci
+          echo "metric,value,unit" > ../reports/ci/backend-metrics.csv
+          echo "backend_verify_time,$((end-start)),seconds" >> ../reports/ci/backend-metrics.csv
       - name: Build JAR
         working-directory: backend
         run: mvn -B -DskipTests package
+      - name: Upload backend coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco-report
+          path: backend/target/site/jacoco/
+      - name: Upload backend CI metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ci-metrics
+          path: reports/ci/backend-metrics.csv
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
@@ -49,7 +65,18 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build
         working-directory: frontend
-        run: npm run build
+        run: |
+          start=$(date +%s)
+          npm run build
+          end=$(date +%s)
+          mkdir -p ../reports/ci
+          echo "metric,value,unit" > ../reports/ci/frontend-metrics.csv
+          echo "frontend_build_time,$((end-start)),seconds" >> ../reports/ci/frontend-metrics.csv
+      - name: Upload frontend CI metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-ci-metrics
+          path: reports/ci/frontend-metrics.csv
 
   mqtt-integration:
     name: MQTT - Publish & Subscribe
@@ -74,10 +101,20 @@ jobs:
             > /tmp/mqtt-message.txt &
           subscriber_pid=$!
           sleep 2
+          publish_started_ms=$(date +%s%3N)
           docker exec ci-mqtt mosquitto_pub -h localhost -t "${MQTT_RIDE_REQUEST_TOPIC}" \
             -m '{"rideId":"ci-ride-001","pickup":"Nyerere Square","dropoff":"Mlimani City","status":"REQUESTED"}'
           wait "$subscriber_pid"
+          publish_finished_ms=$(date +%s%3N)
           grep -q '"status":"REQUESTED"' /tmp/mqtt-message.txt
+          mkdir -p reports/ci
+          echo "metric,value,unit" > reports/ci/mqtt-metrics.csv
+          echo "mqtt_publish_receive_latency,$((publish_finished_ms-publish_started_ms)),milliseconds" >> reports/ci/mqtt-metrics.csv
+      - name: Upload MQTT CI metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqtt-ci-metrics
+          path: reports/ci/mqtt-metrics.csv
 
   docker-build:
     name: Build Docker images

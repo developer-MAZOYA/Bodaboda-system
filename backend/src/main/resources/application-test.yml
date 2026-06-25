@@ -12,4 +12,4 @@ app:
     secret: dsfgdhfjgkhljkjhgkfjhdgfsgdhfjgkhljhkgjfhgdfs
     expiration-ms: 3600000
   mqtt:
-    enabled: true
+    enabled: false

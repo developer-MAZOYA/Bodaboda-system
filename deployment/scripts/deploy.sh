@@ -35,4 +35,18 @@ for i in $(seq 1 30); do
 done
 echo "Backend did not become healthy in time." >&2
 docker compose -f "$COMPOSE_FILE" logs --tail=30 backend || true
+if [[ -n "${PREVIOUS_IMAGE_TAG:-}" ]]; then
+  echo "↩️ Rolling back ${ENV} to previous image tag: ${PREVIOUS_IMAGE_TAG}" >&2
+  export IMAGE_TAG="$PREVIOUS_IMAGE_TAG"
+  docker compose -f "$COMPOSE_FILE" pull
+  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+  for i in $(seq 1 20); do
+    if curl -fsS http://localhost:8080/actuator/health >/dev/null; then
+      echo "✅ Rollback completed and backend is healthy."
+      exit 0
+    fi
+    sleep 3
+  done
+  echo "Rollback attempted, but backend is still unhealthy." >&2
+fi
 exit 1
