@@ -42,6 +42,7 @@ services:
     restart: unless-stopped
     ports: ["80:80"]
 
+
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped
