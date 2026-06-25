@@ -29,7 +29,7 @@ management:
         http.server.requests: 0.5,0.95,0.99
 app:
   jwt:
-    secret: ${JWT_SECRET:change-me-please-use-a-long-secret-key-32+}
+    secret: ${dsfgdhfjgkhljkjhgkfjhdgfsgdhfjgkhljhkgjfhgdfs}
     expiration-ms: 86400000
   mqtt:
     enabled: ${MQTT_ENABLED:true}

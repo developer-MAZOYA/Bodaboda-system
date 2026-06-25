@@ -23,7 +23,7 @@ server:
 
 app:
   jwt:
-    secret: dev-secret-key-for-local-development-only-32char+
+    secret: dsfgdhfjgkhljkjhgkfjhdgfsgdhfjgkhljhkgjfhgdfs
     expiration-ms: 86400000
   mqtt:
     enabled: true
